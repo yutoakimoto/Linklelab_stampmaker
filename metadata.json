@@ -1,0 +1,7 @@
+{
+  "name": "Linklelab_stampmaker",
+  "description": "高品質なLINEスタンプをAIで一括作成。あなたのキャラをスタンプに。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
