@@ -87,17 +87,6 @@ const App: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const getEnvKey = () => {
-    try {
-      // @ts-ignore
-      const key = process.env.API_KEY || window.API_KEY;
-      return key;
-    } catch (e) {
-      // @ts-ignore
-      return window.API_KEY;
-    }
-  };
-
   useEffect(() => {
     const count = activeTab === 'auto' ? 8 : 16;
     setBatchItems(Array(count).fill(null).map((_, i) => ({
@@ -133,7 +122,7 @@ const App: React.FC = () => {
       const suggestions = await suggestMessages(count, basePrompt || "日常で使いやすいスタンプセット");
       setBatchItems(suggestions.map(s => ({ text: s, additionalPrompt: "" })));
     } catch (e: any) {
-      setError(`AI案の取得に失敗しました: ${e.message}\nAPIキーが正しく読み込めていない可能性があります。`);
+      setError(`AI案の取得に失敗しました: ${e.message}`);
     } finally {
       setIsSuggesting(false);
     }
@@ -157,9 +146,8 @@ const App: React.FC = () => {
       return;
     }
 
-    const envKey = getEnvKey();
-    if (!envKey && !window.aistudio) {
-      setError("【APIキーが見つかりません】\n環境変数 API_KEY が空です。\nVercelの設定 > Environment Variables で Name: API_KEY が存在するか確認し、設定した後に必ず Deployments 画面から Redeploy を行ってください。");
+    if (!isKeyReady) {
+      setError("APIキーが選択されていません。上部のダイアログからAPIキーを選択してください。");
       return;
     }
 
@@ -199,22 +187,18 @@ const App: React.FC = () => {
 
   const handleDownloadAll = async () => {
     if (generatedStamps.length === 0) return;
-    
-    for (let i = 0; i < generatedStamps.length; i++) {
-      const stamp = generatedStamps[i];
+    for (const stamp of generatedStamps) {
       const link = document.createElement('a');
       link.href = stamp.url;
-      link.download = `stamp-${stamp.prompt}-${stamp.id.slice(0, 4)}.png`;
+      link.download = `stamp-${stamp.prompt}-${uuidv4().slice(0, 4)}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      // ブラウザが同時に大量のダウンロードをブロックするのを防ぐために少し待つ
       await new Promise(resolve => setTimeout(resolve, 500));
     }
   };
 
   const isPasswordCorrect = inputPassword === APP_PASSWORD;
-  const isEnvKeyAvailable = !!getEnvKey() || !!window.aistudio;
 
   return (
     <div className="min-h-screen bg-[#F8F5F0] pb-40 font-sans text-[#112D42]">
@@ -296,18 +280,15 @@ const App: React.FC = () => {
 
               <div className="p-3 rounded-xl bg-[#F0EDE8]/50 border border-[#E5E0D8]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-[#6b7280]">APIキー検知</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isEnvKeyAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {isEnvKeyAvailable ? 'DETECTED' : 'OFFLINE'}
+                  <span className="text-[10px] font-bold text-[#6b7280]">APIキー接続</span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isKeyReady ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                    {isKeyReady ? 'CONNECTED' : 'DISCONNECTED'}
                   </span>
                 </div>
-                {!isEnvKeyAvailable && (
-                  <div className="mt-3 p-2 bg-white/50 rounded-lg border border-red-100">
-                    <p className="text-[9px] text-red-600 leading-relaxed font-bold">
-                      環境変数がブラウザに反映されていません。<br/>
-                      Vercelの設定でAPI_KEYを追加した後、必ず「Redeploy」を行ってください。
-                    </p>
-                  </div>
+                {!isKeyReady && (
+                  <p className="mt-2 text-[9px] text-[#6b7280] leading-relaxed">
+                    ページ上部の「APIキーを選択」ボタンから、Google AI Studioのキーを選択してください。
+                  </p>
                 )}
               </div>
             </div>
@@ -323,7 +304,7 @@ const App: React.FC = () => {
               </div>
               <button 
                 onClick={handleSuggest} 
-                disabled={isSuggesting || !isPasswordCorrect} 
+                disabled={isSuggesting || !isPasswordCorrect || !isKeyReady} 
                 className="w-full sm:w-auto text-xs bg-[#112D42] text-white px-6 py-3 rounded-full font-bold shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30 flex items-center justify-center gap-2"
               >
                 {isSuggesting ? "案を考え中..." : "✨ AIに案をまかせる"}
@@ -359,7 +340,7 @@ const App: React.FC = () => {
                 <span className="text-base">⚠️</span>
                 <span>ご確認ください</span>
               </div>
-              <p className="ml-6 opacity-80 whitespace-pre-wrap text-left">{error}</p>
+              <p className="ml-6 opacity-80 whitespace-pre-wrap">{error}</p>
             </div>
           )}
 
@@ -372,10 +353,10 @@ const App: React.FC = () => {
                 </h3>
                 <button 
                   onClick={handleDownloadAll}
-                  className="text-xs bg-[#E2B13C] text-white px-5 py-2.5 rounded-full font-bold shadow-md hover:bg-[#d4a32d] transition-all flex items-center gap-2"
+                  className="text-xs bg-[#E2B13C] text-white px-6 py-3 rounded-full font-bold shadow-md hover:bg-[#d4a32d] transition-all flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                  すべて保存する
+                  すべてまとめて保存
                 </button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -407,14 +388,16 @@ const App: React.FC = () => {
           </div>
           <button
             onClick={handleGenerateAll}
-            disabled={isGenerating || !isPasswordCorrect}
-            className={`flex-1 md:flex-none md:min-w-[400px] py-4 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating) ? 'opacity-40 cursor-not-allowed grayscale' : 'hover:scale-[1.01] hover:shadow-2xl active:scale-[0.99]'}`}
+            disabled={isGenerating || !isPasswordCorrect || !isKeyReady}
+            className={`flex-1 md:flex-none md:min-w-[400px] py-4 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating || !isKeyReady) ? 'opacity-40 cursor-not-allowed grayscale' : 'hover:scale-[1.01] hover:shadow-2xl active:scale-[0.99]'}`}
           >
             {isGenerating ? (
               <>
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 生成中 ({progress.current}/{progress.total})
               </>
+            ) : !isKeyReady ? (
+              "APIキーを先に選択してください"
             ) : !isPasswordCorrect ? (
               "パスワードでロックを解除"
             ) : (

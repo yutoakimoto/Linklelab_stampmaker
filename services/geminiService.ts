@@ -12,21 +12,9 @@ export interface StampConfig {
   additionalPrompt: string;
 }
 
-// Helper to get API key safely
+// Helper to get API key safely - Using process.env.API_KEY which is injected by AI Studio selection
 const getApiKey = () => {
-  try {
-    // @ts-ignore
-    const key = process.env.API_KEY || window.API_KEY;
-    if (!key) {
-      console.warn("API_KEY not found in process.env or window. Checking window.process...");
-      // @ts-ignore
-      return window.process?.env?.API_KEY;
-    }
-    return key;
-  } catch (e) {
-    // @ts-ignore
-    return window.API_KEY || window.process?.env?.API_KEY;
-  }
+  return process.env.API_KEY;
 };
 
 // Helper to convert Blob/File to Base64
@@ -51,9 +39,10 @@ export const suggestMessages = async (count: number, context: string): Promise<s
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("APIキーが定義されていません。環境変数をご確認ください。");
+    throw new Error("APIキーが選択されていません。");
   }
 
+  // Create new instance to ensure latest key is used
   const ai = new GoogleGenAI({ apiKey });
   const prompt = `LINEスタンプのメッセージ案を${count}個考えてください。
   文脈・設定: ${context || "日常で使いやすいもの"}`;
@@ -97,7 +86,7 @@ export const generateStampImage = async (
 ): Promise<string> => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("APIキーがまだ反映されていません。VercelでRedeployを実行してください。");
+    throw new Error("APIキーが選択されていません。");
   }
   
   const ai = new GoogleGenAI({ apiKey });
@@ -168,6 +157,9 @@ export const generateStampImage = async (
     throw new Error("画像が生成されませんでした。");
   } catch (error: any) {
     console.error("Gemini Image API Error:", error);
+    if (error.message?.includes("entity was not found")) {
+      throw new Error("APIキーの設定エラーです。Google AI Studioで適切なプロジェクト（請求設定済みなど）のキーを選択し直してください。");
+    }
     throw new Error(`画像生成エラー: ${error.message}`);
   }
 };
