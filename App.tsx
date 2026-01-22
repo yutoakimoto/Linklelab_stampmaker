@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { ApiKeyChecker } from './components/ApiKeyChecker';
 import { generateStampImage, fileToBase64, suggestMessages, ReferenceImageData, StampConfig } from './services/geminiService';
 import { StampStyle, GeneratedStamp } from './types';
@@ -17,6 +17,43 @@ const STYLE_LABELS: Record<StampStyle, string> = {
 
 const MAX_IMAGES = 3;
 const APP_PASSWORD = "linklelab";
+
+// 個別の入力欄コンポーネント（再描画を抑えて入力の不具合を防ぐ）
+const BatchItemRow = memo(({ 
+  index, 
+  item, 
+  activeTab, 
+  onUpdate 
+}: { 
+  index: number, 
+  item: StampConfig, 
+  activeTab: 'auto' | 'semi',
+  onUpdate: (index: number, field: keyof StampConfig, value: string) => void 
+}) => {
+  return (
+    <div className="flex flex-col p-4 bg-[#F9F9F9] rounded-2xl border border-[#F0EDE8] hover:border-[#E2B13C] transition-colors shadow-sm">
+      <div className="flex items-center gap-3 mb-2">
+        <span className="text-[10px] text-[#E2B13C] font-bold w-6">#{index + 1}</span>
+        <input 
+          type="text" 
+          value={item.text} 
+          onChange={e => onUpdate(index, 'text', e.target.value)} 
+          placeholder="スタンプの文字（例：了解！）" 
+          className="flex-1 p-0 bg-transparent border-none text-sm font-bold text-[#112D42] placeholder-[#C0B7A9] focus:ring-0 outline-none"
+        />
+      </div>
+      {activeTab === 'semi' && (
+        <input 
+          type="text" 
+          value={item.additionalPrompt} 
+          onChange={e => onUpdate(index, 'additionalPrompt', e.target.value)} 
+          placeholder="表情やポーズの指定（例：笑顔で手を振る）" 
+          className="p-0 bg-transparent border-none text-[10px] text-[#6b7280] placeholder-[#D1D5DB] focus:ring-0 outline-none border-t border-[#F0EDE8] pt-2 mt-1"
+        />
+      )}
+    </div>
+  );
+});
 
 const App: React.FC = () => {
   const [isKeyReady, setIsKeyReady] = useState(false);
@@ -38,6 +75,7 @@ const App: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 初期化
   useEffect(() => {
     const count = activeTab === 'auto' ? 8 : 16;
     setBatchItems(Array(count).fill(null).map((_, i) => ({
@@ -63,7 +101,7 @@ const App: React.FC = () => {
 
   const handleSuggest = async () => {
     if (inputPassword !== APP_PASSWORD) {
-      setError("パスワードが正しくありません。");
+      setError("パスワードを入力してから「AI案」を実行してください。");
       return;
     }
     setIsSuggesting(true);
@@ -73,28 +111,41 @@ const App: React.FC = () => {
       const suggestions = await suggestMessages(count, basePrompt || "日常で使いやすいスタンプセット");
       setBatchItems(suggestions.map(s => ({ text: s, additionalPrompt: "" })));
     } catch (e) {
-      setError("提案の取得に失敗しました。");
+      setError("提案の取得に失敗しました。時間をおいて再度お試しください。");
     } finally {
       setIsSuggesting(false);
     }
   };
 
-  const updateBatchItem = (index: number, field: keyof StampConfig, value: string) => {
-    const newItems = [...batchItems];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setBatchItems(newItems);
-  };
+  const updateBatchItem = useCallback((index: number, field: keyof StampConfig, value: string) => {
+    setBatchItems(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  }, []);
 
   const handleGenerateAll = async () => {
-    if (!isKeyReady) return;
+    setError(null);
+
+    // バリデーションチェック
     if (inputPassword !== APP_PASSWORD) {
-      setError("有効なパスワードを入力してください。");
+      setError("認証パスワードが正しくありません。");
+      return;
+    }
+
+    if (!isKeyReady) {
+      setError("APIキーの準備ができていません。環境変数またはAPIキーの選択を確認してください。");
+      return;
+    }
+
+    const activeItems = batchItems.filter(item => item.text.trim() !== "");
+    if (activeItems.length === 0) {
+      setError("スタンプの文字を1つ以上入力してください。");
       return;
     }
 
     setIsGenerating(true);
-    setError(null);
-    const activeItems = batchItems.filter(item => item.text);
     setProgress({ current: 0, total: activeItems.length });
 
     try {
@@ -109,16 +160,17 @@ const App: React.FC = () => {
         const item = activeItems[i];
         try {
           const url = await generateStampImage(refImgs, style, item.text, `${basePrompt} ${item.additionalPrompt}`);
-          newStamps.push({ id: uuidv4(), url, prompt: item.text, timestamp: Date.now() });
+          const stamp = { id: uuidv4(), url, prompt: item.text, timestamp: Date.now() };
+          newStamps.push(stamp);
+          setGeneratedStamps(prev => [stamp, ...prev]); // 1枚ずつ表示
           setProgress(prev => ({ ...prev, current: i + 1 }));
-        } catch (e) {
+        } catch (e: any) {
           console.error(`Failed at item ${i}`, e);
+          setError(`「${item.text}」の生成に失敗しました: ${e.message || "エラー"}`);
         }
       }
-
-      setGeneratedStamps(prev => [...newStamps, ...prev]);
     } catch (err: any) {
-      setError("生成中にエラーが発生しました。");
+      setError("予期せぬエラーが発生しました。");
     } finally {
       setIsGenerating(false);
     }
@@ -175,12 +227,12 @@ const App: React.FC = () => {
                   {selectedFiles.length < MAX_IMAGES && (
                     <button onClick={() => fileInputRef.current?.click()} className="aspect-square border-2 border-dashed border-[#E5E0D8] rounded-2xl flex flex-col items-center justify-center text-[#6b7280] hover:bg-[#F9F9F9] transition-colors">
                       <svg className="w-6 h-6 mb-1 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                      <span className="text-[10px] font-bold">参考写真を追加</span>
+                      <span className="text-[10px] font-bold text-center px-1">参考写真<br/>を追加</span>
                     </button>
                   )}
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-[#6b7280] ml-1">特徴の説明（任意）</label>
+                  <label className="text-[10px] font-bold text-[#6b7280] ml-1">全体の特徴（任意）</label>
                   <textarea 
                     rows={3}
                     value={basePrompt} 
@@ -203,7 +255,7 @@ const App: React.FC = () => {
                   <button 
                     key={key} 
                     onClick={() => setStyle(value)} 
-                    className={`p-3 text-xs rounded-xl border transition-all text-center ${style === value ? 'border-[#112D42] bg-[#112D42] text-white font-bold' : 'border-[#F0EDE8] text-[#112D42] hover:bg-[#F9F9F9]'}`}
+                    className={`p-3 text-xs rounded-xl border transition-all text-center ${style === value ? 'border-[#112D42] bg-[#112D42] text-white font-bold shadow-md' : 'border-[#F0EDE8] text-[#112D42] hover:bg-[#F9F9F9]'}`}
                   >
                     {STYLE_LABELS[value as StampStyle]}
                   </button>
@@ -256,58 +308,44 @@ const App: React.FC = () => {
 
               <div className={`grid gap-3 max-h-[600px] overflow-y-auto p-1 custom-scroll ${activeTab === 'semi' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                 {batchItems.map((item, index) => (
-                  <div key={index} className="flex flex-col p-4 bg-[#F9F9F9] rounded-2xl border border-[#F0EDE8] hover:border-[#E2B13C] transition-colors">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-[10px] text-[#E2B13C] font-bold w-6">#{index + 1}</span>
-                      <input 
-                        type="text" 
-                        value={item.text} 
-                        onChange={e => updateBatchItem(index, 'text', e.target.value)} 
-                        placeholder="文字を入力" 
-                        className="flex-1 p-0 bg-transparent border-none text-sm font-bold text-[#112D42] placeholder-[#C0B7A9] focus:ring-0 outline-none"
-                      />
-                    </div>
-                    {activeTab === 'semi' && (
-                      <input 
-                        type="text" 
-                        value={item.additionalPrompt} 
-                        onChange={e => updateBatchItem(index, 'additionalPrompt', e.target.value)} 
-                        placeholder="こだわり（例：走っているポーズなど）" 
-                        className="p-0 bg-transparent border-none text-[10px] text-[#6b7280] placeholder-[#D1D5DB] focus:ring-0 outline-none"
-                      />
-                    )}
-                  </div>
+                  <BatchItemRow 
+                    key={`${activeTab}-${index}`} 
+                    index={index} 
+                    item={item} 
+                    activeTab={activeTab} 
+                    onUpdate={updateBatchItem} 
+                  />
                 ))}
               </div>
             </section>
 
             {isGenerating && (
-              <div className="bg-[#112D42] text-white rounded-3xl p-6 shadow-xl space-y-4">
+              <div className="bg-[#112D42] text-white rounded-3xl p-6 shadow-xl space-y-4 animate-pulse">
                 <div className="flex justify-between items-center text-xs font-bold tracking-wider">
-                  <span>スタンプを生成中...</span>
+                  <span>スタンプを1枚ずつ丁寧に生成中...</span>
                   <span>{progress.current} / {progress.total}</span>
                 </div>
                 <div className="w-full bg-white/10 h-1 rounded-full overflow-hidden">
                   <div className="bg-[#E2B13C] h-full transition-all duration-500" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
                 </div>
-                <p className="text-center text-[10px] opacity-70">少々お待ちください。</p>
+                <p className="text-center text-[10px] opacity-70">Nano Banana Proがあなたのスタンプを描いています。少々お待ちください。</p>
               </div>
             )}
 
             {error && (
-              <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs text-center border border-red-100 font-bold">
-                {error}
+              <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-xs text-center border border-red-100 font-bold shadow-sm animate-bounce">
+                ⚠️ {error}
               </div>
             )}
 
             {generatedStamps.length > 0 && (
-              <section className="space-y-4 animate-in fade-in duration-500">
+              <section className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-[#112D42]">完成したスタンプ</h2>
+                  <h2 className="text-lg font-bold text-[#112D42]">生成されたスタンプ ({generatedStamps.length}枚)</h2>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                   {generatedStamps.map(stamp => (
-                    <div key={stamp.id} className="bg-white p-2 rounded-2xl shadow-sm border border-[#E5E0D8] group relative hover:shadow-md transition-all">
+                    <div key={stamp.id} className="bg-white p-2 rounded-2xl shadow-sm border border-[#E5E0D8] group relative hover:shadow-md transition-all animate-in zoom-in-95 duration-300">
                       <div className="aspect-square bg-[#F9F9F9] rounded-xl overflow-hidden mb-2">
                         <img src={stamp.url} alt={stamp.prompt} className="w-full h-full object-contain" />
                       </div>
@@ -319,7 +357,7 @@ const App: React.FC = () => {
                           link.download = `stamp-${stamp.id}.png`;
                           link.click();
                         }}
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-[#E2B13C] text-white p-2 rounded-full shadow-lg transition-all"
+                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 bg-[#E2B13C] text-white p-2 rounded-full shadow-lg transition-all transform hover:scale-110"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                       </button>
@@ -342,10 +380,19 @@ const App: React.FC = () => {
           </div>
           <button
             onClick={handleGenerateAll}
-            disabled={isGenerating || !isKeyReady || !isPasswordCorrect}
-            className={`flex-1 sm:flex-none sm:min-w-[320px] py-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-3 transition-all premium-gradient text-white ${isGenerating || !isPasswordCorrect ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.01]'}`}
+            disabled={isGenerating}
+            className={`flex-1 sm:flex-none sm:min-w-[320px] py-4 rounded-2xl font-bold text-lg shadow-xl flex items-center justify-center gap-3 transition-all premium-gradient text-white ${isGenerating ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.01] active:scale-[0.98]'}`}
           >
-            {isGenerating ? "生成中..." : !isPasswordCorrect ? "パスワードが必要です" : "スタンプをまとめて作成する"}
+            {isGenerating ? (
+              <>
+                <span className="animate-spin text-xl">⏳</span>
+                生成中 ({progress.current}/{progress.total})
+              </>
+            ) : !isPasswordCorrect ? (
+              "パスワードが必要です"
+            ) : (
+              "スタンプをまとめて作成する"
+            )}
           </button>
         </div>
       </div>
