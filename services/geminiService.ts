@@ -12,6 +12,17 @@ export interface StampConfig {
   additionalPrompt: string;
 }
 
+/**
+ * 有効なAPIキーを取得し、GoogleGenAIインスタンスを返却する
+ */
+const getAiClient = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    throw new Error("APIキーが設定されていません。Google AI Studioでキーを選択してください。");
+  }
+  return new GoogleGenAI({ apiKey });
+};
+
 // Helper to convert Blob/File to Base64
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -30,7 +41,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
  * AIにメッセージ案を提案してもらう機能
  */
 export const suggestMessages = async (count: number, context: string): Promise<string[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAiClient();
   
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
@@ -61,8 +72,7 @@ export const generateStampImage = async (
   text: string,
   additionalPrompt: string
 ): Promise<string> => {
-  // 常に最新のAPIキーを使用するため、呼び出し直前にインスタンス化
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = getAiClient();
 
   const characterConsistencyInstruction = referenceImages && referenceImages.length > 0 
     ? `Maintain the character from the images. Artistic medium/brush stroke must be identical to the references.`
@@ -99,7 +109,7 @@ export const generateStampImage = async (
   });
 
   const candidate = response.candidates?.[0];
-  if (!candidate) throw new Error("No candidates returned from AI.");
+  if (!candidate) throw new Error("AIから応答がありませんでした。");
 
   for (const part of candidate.content.parts) {
     if (part.inlineData) {
@@ -107,5 +117,5 @@ export const generateStampImage = async (
     }
   }
   
-  throw new Error("No image data found in AI response.");
+  throw new Error("画像データが応答に含まれていません。");
 };
