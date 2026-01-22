@@ -146,10 +146,8 @@ const App: React.FC = () => {
       return;
     }
 
-    if (!isKeyReady) {
-      setError("APIキーが選択されていません。");
-      return;
-    }
+    // isKeyReady は ApiKeyChecker で AI Studio 環境の場合のみ厳密にチェックされる
+    // スタンドアロン環境では常に true になるように調整済み
 
     const activeItems = batchItems.filter(item => item && item.text.trim() !== "");
     if (activeItems.length === 0) {
@@ -166,19 +164,23 @@ const App: React.FC = () => {
         refImgs.push({ base64: await fileToBase64(file), mimeType: file.type });
       }
 
+      const results: GeneratedStamp[] = [];
       for (let i = 0; i < activeItems.length; i++) {
         const item = activeItems[i];
         try {
           const url = await generateStampImage(refImgs, style, item.text, `${basePrompt} ${item.additionalPrompt}`);
           const stamp = { id: uuidv4(), url, prompt: item.text, timestamp: Date.now() };
+          results.unshift(stamp);
           setGeneratedStamps(prev => [stamp, ...prev]);
           setProgress(prev => ({ ...prev, current: i + 1 }));
         } catch (e: any) {
+          console.error(`Generation error for "${item.text}":`, e);
           if (e.message.includes("Requested entity was not found")) {
-            setIsKeyReady(false); // キー再選択を促す
-            throw new Error("APIキーが無効です。もう一度キーを選択し直してください。");
+            throw new Error("APIキーが無効、または期限切れです。AI Studio環境の場合はキーを選択し直してください。");
           }
-          throw e;
+          // 1つのエラーで全体を止めず、続行を試みるが、重大なエラー（キー不足等）は投げる
+          if (e.message.includes("API key")) throw e;
+          setError(`「${item.text}」の生成に失敗しました: ${e.message}`);
         }
       }
     } catch (err: any) {
@@ -278,9 +280,9 @@ const App: React.FC = () => {
                 className={`w-full p-4 border rounded-2xl text-sm outline-none transition-all ${isPasswordCorrect ? 'bg-green-50 border-green-200' : 'bg-[#F9F9F9] border-[#F0EDE8]'}`}
               />
               <div className="flex items-center justify-between p-3 bg-[#F8F5F0] rounded-xl border border-[#E5E0D8]">
-                <span className="text-[10px] font-bold text-[#6b7280]">AI Status</span>
+                <span className="text-[10px] font-bold text-[#6b7280]">System Status</span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isKeyReady ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {isKeyReady ? 'READY' : 'KEY MISSING'}
+                  {isKeyReady ? 'READY' : 'WAITING...'}
                 </span>
               </div>
             </div>
@@ -296,7 +298,7 @@ const App: React.FC = () => {
               </div>
               <button 
                 onClick={handleSuggest} 
-                disabled={isSuggesting || !isPasswordCorrect || !isKeyReady} 
+                disabled={isSuggesting || !isPasswordCorrect} 
                 className="w-full sm:w-auto text-xs bg-[#112D42] text-white px-6 py-3 rounded-full font-bold shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
               >
                 {isSuggesting ? "思考中..." : "✨ AIに案をまかせる"}
@@ -366,8 +368,8 @@ const App: React.FC = () => {
         <div className="max-w-5xl mx-auto flex items-center justify-center">
           <button
             onClick={handleGenerateAll}
-            disabled={isGenerating || !isPasswordCorrect || !isKeyReady}
-            className={`w-full max-w-lg py-5 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating || !isKeyReady) ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
+            disabled={isGenerating || !isPasswordCorrect}
+            className={`w-full max-w-lg py-5 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating) ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
           >
             {isGenerating ? `生成中 (${progress.current}/${progress.total})` : "スタンプを一括生成する"}
           </button>
