@@ -12,6 +12,15 @@ export interface StampConfig {
   additionalPrompt: string;
 }
 
+// Helper to get API key safely
+const getApiKey = () => {
+  try {
+    return process.env.API_KEY || (window as any).process?.env?.API_KEY;
+  } catch (e) {
+    return undefined;
+  }
+};
+
 // Helper to convert Blob/File to Base64
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -33,7 +42,7 @@ export const suggestMessages = async (count: number, context: string): Promise<s
   // デフォルトの提案（エラー時のバックアップ）
   const fallback = ["ありがとう", "了解", "おやすみ", "OK", "おつかれ", "よろしく", "ぺこり", "！！", "まかせて", "ぴえん", "わーい", "おめでとう", "すごい！", "それな", "おはよ", "またね"].slice(0, count);
 
-  const apiKey = process.env.API_KEY;
+  const apiKey = getApiKey();
   if (!apiKey) {
     console.warn("API_KEY is not defined. Using fallback suggestions.");
     return fallback;
@@ -80,9 +89,9 @@ export const generateStampImage = async (
   text: string,
   additionalPrompt: string
 ): Promise<string> => {
-  const apiKey = process.env.API_KEY;
+  const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error("APIキーが設定されていません。Vercelの環境変数を確認してください。");
+    throw new Error("APIキーがまだ反映されていません。VercelでRedeployを実行してください。");
   }
   
   const ai = new GoogleGenAI({ apiKey });

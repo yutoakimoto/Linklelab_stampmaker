@@ -87,9 +87,13 @@ const App: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // process.env の中身をより確実にチェックする
+  // 環境変数の取得（様々なパターンに対応）
   const getEnvKey = () => {
-    return process.env.API_KEY || (window as any).process?.env?.API_KEY;
+    try {
+      return process.env.API_KEY || (window as any).process?.env?.API_KEY;
+    } catch (e) {
+      return undefined;
+    }
   };
 
   useEffect(() => {
@@ -127,7 +131,7 @@ const App: React.FC = () => {
       const suggestions = await suggestMessages(count, basePrompt || "日常で使いやすいスタンプセット");
       setBatchItems(suggestions.map(s => ({ text: s, additionalPrompt: "" })));
     } catch (e) {
-      setError("AI案の取得に失敗しました。APIキーが正しく読み込めていない可能性があります。");
+      setError("AI案の取得に失敗しました。再デプロイが完了しているか確認してください。");
     } finally {
       setIsSuggesting(false);
     }
@@ -153,7 +157,7 @@ const App: React.FC = () => {
 
     const envKey = getEnvKey();
     if (!envKey && !window.aistudio) {
-      setError("【APIキーが未設定です】\nVercelの『Environment Variables』の設定を確認してください。\n・Name: API_KEY (Linklelab ではなく API_KEY に変更)\n・Value: あなたのAPIキー\n設定変更後、必ず『Redeploy』を実行してください。");
+      setError("【APIキーがまだ反映されていません】\n1. Vercelで Name を『API_KEY』にして Save しましたか？\n2. その後、Vercelの『Deployments』タブから『Redeploy』を実行しましたか？\n\n『Redeploy』をしないと、名前を変えてもアプリ側には伝わりません。");
       return;
     }
 
@@ -180,7 +184,7 @@ const App: React.FC = () => {
           setGeneratedStamps(prev => [stamp, ...prev]);
           setProgress(prev => ({ ...prev, current: i + 1 }));
         } catch (e: any) {
-          setError(`「${item.text}」の作成中にエラー: ${e.message}\nAPIキーが有効（Paid Projectなど）か確認してください。`);
+          setError(`「${item.text}」の作成中にエラー: ${e.message}\nAPIキーが有効な有料プロジェクトのものか確認してください。`);
           break; 
         }
       }
@@ -282,9 +286,7 @@ const App: React.FC = () => {
                 {!isEnvKeyAvailable && (
                   <div className="mt-3 p-2 bg-white/50 rounded-lg border border-red-100">
                     <p className="text-[9px] text-red-600 leading-relaxed font-bold">
-                      Vercel環境変数名が間違っています！<br/>
-                      × Name: Linklelab<br/>
-                      ○ Name: API_KEY
+                      設定を反映させるために、Vercelの『Deployments』タブから <span className="underline">Redeploy</span> を実行してください！
                     </p>
                   </div>
                 )}
