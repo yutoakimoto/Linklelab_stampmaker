@@ -10,9 +10,13 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
   const [needsKey, setNeedsKey] = useState(false);
 
   const checkKey = async () => {
-    // AI Studio外（Vercelデプロイ後など）
+    // 複数の場所からキーを探す
+    const getEnvKey = () => {
+      return process.env.API_KEY || (window as any).process?.env?.API_KEY;
+    };
+
     if (!window.aistudio) {
-      const hasEnvKey = !!process.env.API_KEY;
+      const hasEnvKey = !!getEnvKey();
       setChecking(false);
       setNeedsKey(false);
       onKeyStatusChange(hasEnvKey);
@@ -57,7 +61,7 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
   if (checking) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06C755]"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#112D42]"></div>
       </div>
     );
   }
@@ -70,7 +74,7 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
           <p className="text-gray-600 mb-6">スタンプ生成にはNano Banana Proが利用可能なAPIキーが必要です。</p>
           <button
             onClick={handleSelectKey}
-            className="w-full bg-[#06C755] hover:bg-[#05b34c] text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg"
+            className="w-full bg-[#112D42] hover:bg-[#1e3a5f] text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg"
           >
             APIキーを選択
           </button>
