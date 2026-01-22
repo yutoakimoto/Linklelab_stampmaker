@@ -13,7 +13,6 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
   const checkStatus = async () => {
     setChecking(true);
     
-    // 1. 環境変数が既に設定されているか確認
     const envKey = process.env.API_KEY;
     if (envKey && envKey !== 'undefined' && envKey !== '') {
       setHasKey(true);
@@ -22,7 +21,6 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
       return;
     }
 
-    // 2. AI Studio 環境の確認
     if (window.aistudio) {
       setIsAiStudio(true);
       try {
@@ -30,13 +28,11 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
         setHasKey(selected);
         onKeyStatusChange(selected);
       } catch (e) {
-        console.error("Key check failed", e);
-        // エラー時は進行を優先
+        console.error("設定確認中にエラーが発生しました", e);
         setHasKey(true);
         onKeyStatusChange(true);
       }
     } else {
-      // AI Studio外
       setHasKey(true);
       onKeyStatusChange(true);
     }
@@ -45,7 +41,6 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
 
   const handleOpenSelectKey = () => {
     if (window.aistudio) {
-      // 規定: キー選択ダイアログをトリガーした後は成功したとみなして即座にアプリへ
       window.aistudio.openSelectKey();
       setHasKey(true);
       onKeyStatusChange(true);
@@ -54,7 +49,6 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
 
   useEffect(() => {
     checkStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (checking) {
@@ -62,7 +56,7 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
       <div className="fixed inset-0 flex items-center justify-center bg-[#F8F5F0] z-50">
         <div className="flex flex-col items-center gap-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#112D42]"></div>
-          <p className="text-xs font-bold text-[#112D42] animate-pulse tracking-widest">INITIALIZING...</p>
+          <p className="text-xs font-bold text-[#112D42] animate-pulse tracking-widest uppercase">準備中...</p>
         </div>
       </div>
     );
@@ -75,9 +69,9 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeyStatusChange 
           <div className="w-20 h-20 bg-[#F8F5F0] rounded-full flex items-center justify-center mx-auto mb-8 shadow-inner">
             <span className="text-3xl">🔑</span>
           </div>
-          <h2 className="text-2xl font-bold text-[#112D42] mb-4">なのばななプロを有効化</h2>
+          <h2 className="text-2xl font-bold text-[#112D42] mb-4">高品質生成を有効化</h2>
           <p className="text-sm text-gray-500 mb-8 leading-relaxed">
-            高品質な画像生成を利用するには、Google AI Studio で有効なAPIキーを選択する必要があります。
+            このアプリで高品質な画像生成を利用するには、Google AI Studio でAPIキーを選択する必要があります。
           </p>
           
           <button

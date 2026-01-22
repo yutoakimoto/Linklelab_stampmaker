@@ -13,12 +13,12 @@ export interface StampConfig {
 }
 
 /**
- * 有効なAPIキーを取得し、GoogleGenAIインスタンスを返却する
+ * 呼び出しの直前に最新のAPIキーを使用してインスタンスを生成する
  */
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey === 'undefined') {
-    throw new Error("APIキーが設定されていません。Google AI Studioでキーを選択してください。");
+    throw new Error("APIキーが設定されていません。AI Studioでキーを選択してください。");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -55,12 +55,14 @@ export const suggestMessages = async (count: number, context: string): Promise<s
           description: "スタンプに使用する短いフレーズ（10文字以内）"
         }
       },
-      systemInstruction: "あなたは人気LINEスタンプの企画担当者です。ユーザーの要望に合わせて、短くて使いやすいスタンプの文言をJSON形式の配列で提案してください。"
+      systemInstruction: "あなたは人気LINEスタンプの企画担当者です。ユーザーの要望に合わせて、短くて使いやすいスタンプの文言をJSON形式の配列で提案してください。出力はJSONのみにしてください。"
     }
   });
 
   const rawText = response.text || "[]";
-  return JSON.parse(rawText);
+  // 余計な装飾（マークダウン等）があれば除去してパース
+  const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+  return JSON.parse(cleanJson);
 };
 
 /**

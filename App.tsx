@@ -49,7 +49,7 @@ const BatchItemRow = memo(({
           value={text} 
           onChange={e => setText(e.target.value)} 
           onBlur={handleBlurText}
-          placeholder="スタンプの文字" 
+          placeholder="スタンプに入れる文字" 
           className="flex-1 p-0 bg-transparent border-none text-sm font-bold text-[#112D42] placeholder-[#C0B7A9] focus:ring-0 outline-none"
         />
       </div>
@@ -59,7 +59,7 @@ const BatchItemRow = memo(({
           value={prompt} 
           onChange={e => setPrompt(e.target.value)} 
           onBlur={handleBlurPrompt}
-          placeholder="表情やポーズの指定" 
+          placeholder="表情やポーズの具体的な指定" 
           className="p-0 bg-transparent border-none text-[10px] text-[#6b7280] placeholder-[#D1D5DB] focus:ring-0 outline-none border-t border-[#F0EDE8] pt-2 mt-1"
         />
       )}
@@ -112,7 +112,7 @@ const App: React.FC = () => {
 
   const handleSuggest = async () => {
     if (inputPassword !== APP_PASSWORD) {
-      setError("アクセス認証を済ませてください。");
+      setError("アクセス認証を完了させてください。");
       return;
     }
     setIsSuggesting(true);
@@ -122,7 +122,7 @@ const App: React.FC = () => {
       const suggestions = await suggestMessages(count, basePrompt || "日常で使いやすいスタンプセット");
       setBatchItems(suggestions.map(s => ({ text: s, additionalPrompt: "" })));
     } catch (e: any) {
-      setError(`AI案の取得に失敗しました: ${e.message}`);
+      setError(`スタンプ案の提案に失敗しました: ${e.message}`);
     } finally {
       setIsSuggesting(false);
     }
@@ -142,7 +142,7 @@ const App: React.FC = () => {
     setError(null);
 
     if (inputPassword !== APP_PASSWORD) {
-      setError("パスワードが正しくありません。");
+      setError("パスワードが正しくありません。認証を完了してください。");
       return;
     }
 
@@ -169,13 +169,13 @@ const App: React.FC = () => {
           setGeneratedStamps(prev => [stamp, ...prev]);
           setProgress(prev => ({ ...prev, current: i + 1 }));
         } catch (e: any) {
-          console.error(`Error generating "${item.text}":`, e);
-          if (e.message.includes("API Key must be set") || e.message.includes("Requested entity was not found")) {
-            setError("APIキーがまだ反映されていないか、無効です。数秒待ってから再試行するか、キーを選択し直してください。");
+          console.error(`「${item.text}」の生成中にエラー:`, e);
+          if (e.message.includes("API Key") || e.message.includes("entity was not found")) {
+            setError("APIキーの接続に問題があります。数秒待つか、キーの再選択を試してください。");
             setIsGenerating(false);
             return;
           }
-          setError(`「${item.text}」の生成に失敗しました: ${e.message}`);
+          setError(`「${item.text}」の生成に失敗しました。次のスタンプへ進みます。`);
         }
       }
     } catch (err: any) {
@@ -211,8 +211,8 @@ const App: React.FC = () => {
             <h1 className="text-xl font-bold text-[#112D42] tracking-tight">Linklelab_stampmaker</h1>
           </div>
           <div className="flex bg-[#F0EDE8] rounded-full p-1 border border-[#E5E0D8]">
-            <button onClick={() => setActiveTab('auto')} className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'auto' ? 'bg-[#112D42] text-white shadow-md' : 'text-[#6b7280]'}`}>8枚</button>
-            <button onClick={() => setActiveTab('semi')} className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'semi' ? 'bg-[#112D42] text-white shadow-md' : 'text-[#6b7280]'}`}>16枚</button>
+            <button onClick={() => setActiveTab('auto')} className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'auto' ? 'bg-[#112D42] text-white shadow-md' : 'text-[#6b7280]'}`}>8枚セット</button>
+            <button onClick={() => setActiveTab('semi')} className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${activeTab === 'semi' ? 'bg-[#112D42] text-white shadow-md' : 'text-[#6b7280]'}`}>16枚セット</button>
           </div>
         </div>
       </header>
@@ -222,7 +222,7 @@ const App: React.FC = () => {
           <section className="bg-white rounded-3xl p-6 card-shadow border border-[#E5E0D8]">
             <h3 className="text-xs font-bold mb-4 text-[#E2B13C] uppercase tracking-widest flex items-center gap-2">
               <span className="w-2 h-2 bg-[#E2B13C] rounded-full"></span>
-              Character Settings
+              キャラクター設定
             </h3>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {previewUrls.map((url, i) => (
@@ -241,7 +241,7 @@ const App: React.FC = () => {
             <textarea 
               value={basePrompt} 
               onChange={e => setBasePrompt(e.target.value)} 
-              placeholder="キャラの特徴（例：赤い帽子、銀髪）" 
+              placeholder="キャラクターの特徴を教えてください（例：赤い帽子をかぶった白猫、ツインテールの少女など）" 
               className="w-full p-4 border border-[#F0EDE8] bg-[#F9F9F9] rounded-2xl text-sm h-28 focus:ring-1 focus:ring-[#112D42] outline-none transition-all resize-none" 
             />
             <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
@@ -250,7 +250,7 @@ const App: React.FC = () => {
           <section className="bg-white rounded-3xl p-6 card-shadow border border-[#E5E0D8]">
             <h3 className="text-xs font-bold mb-4 text-[#E2B13C] uppercase tracking-widest flex items-center gap-2">
               <span className="w-2 h-2 bg-[#E2B13C] rounded-full"></span>
-              Art Style
+              スタンプの画風
             </h3>
             <div className="grid grid-cols-2 gap-2">
               {Object.entries(StampStyle).map(([key, value]) => (
@@ -264,20 +264,20 @@ const App: React.FC = () => {
           <section className="bg-white rounded-3xl p-6 card-shadow border border-[#E5E0D8]">
             <h3 className="text-xs font-bold mb-4 text-[#E2B13C] uppercase tracking-widest flex items-center gap-2">
               <span className="w-2 h-2 bg-[#E2B13C] rounded-full"></span>
-              Authentication
+              アクセス認証
             </h3>
             <div className="space-y-4">
               <input 
                 type="password" 
                 value={inputPassword} 
                 onChange={e => setInputPassword(e.target.value)} 
-                placeholder="アプリパスワード (linklelab)" 
+                placeholder="パスワードを入力" 
                 className={`w-full p-4 border rounded-2xl text-sm outline-none transition-all ${isPasswordCorrect ? 'bg-green-50 border-green-200' : 'bg-[#F9F9F9] border-[#F0EDE8]'}`}
               />
               <div className="flex items-center justify-between p-3 bg-[#F8F5F0] rounded-xl border border-[#E5E0D8]">
-                <span className="text-[10px] font-bold text-[#6b7280]">API Status</span>
+                <span className="text-[10px] font-bold text-[#6b7280]">接続状況</span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isKeyReady ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                  {isKeyReady ? 'READY' : 'WAITING'}
+                  {isKeyReady ? '正常' : '待機中'}
                 </span>
               </div>
             </div>
@@ -288,15 +288,15 @@ const App: React.FC = () => {
           <section className="bg-white rounded-3xl p-6 md:p-8 card-shadow border border-[#E5E0D8]">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
               <div>
-                <h3 className="font-bold text-[#112D42] text-lg">スタンプ案の入力</h3>
-                <p className="text-[10px] text-[#6b7280]">生成したいフレーズを入力してください。</p>
+                <h3 className="font-bold text-[#112D42] text-lg">スタンプ案の編集</h3>
+                <p className="text-[10px] text-[#6b7280]">作成したいスタンプのフレーズを自由に変更できます。</p>
               </div>
               <button 
                 onClick={handleSuggest} 
                 disabled={isSuggesting || !isPasswordCorrect} 
                 className="w-full sm:w-auto text-xs bg-[#112D42] text-white px-6 py-3 rounded-full font-bold shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
               >
-                {isSuggesting ? "思考中..." : "✨ AIに案をまかせる"}
+                {isSuggesting ? "提案を生成中..." : "✨ AIにフレーズを提案してもらう"}
               </button>
             </div>
             
@@ -318,7 +318,7 @@ const App: React.FC = () => {
               <div className="absolute top-0 left-0 w-full h-1 bg-white/10">
                 <div className="h-full bg-[#E2B13C] transition-all duration-500" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
               </div>
-              <p className="text-base font-bold mb-2">高品質なスタンプを描画中...</p>
+              <p className="text-base font-bold mb-2">高品質スタンプを生成中...</p>
               <p className="text-[11px] opacity-70">なのばななプロが作成しています ({progress.current}/{progress.total})</p>
             </div>
           )}
@@ -332,12 +332,12 @@ const App: React.FC = () => {
           {generatedStamps.length > 0 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-[#112D42] text-lg">生成完了 ({generatedStamps.length}枚)</h3>
+                <h3 className="font-bold text-[#112D42] text-lg">生成結果 ({generatedStamps.length}枚)</h3>
                 <button 
                   onClick={handleDownloadAll}
                   className="text-xs bg-[#E2B13C] text-white px-6 py-3 rounded-full font-bold shadow-md hover:bg-[#d4a32d] transition-all"
                 >
-                  すべてまとめて保存
+                  すべての画像を保存する
                 </button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -366,7 +366,7 @@ const App: React.FC = () => {
             disabled={isGenerating || !isPasswordCorrect}
             className={`w-full max-w-lg py-5 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating) ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
           >
-            {isGenerating ? `生成中 (${progress.current}/${progress.total})` : "スタンプを一括生成する"}
+            {isGenerating ? `生成しています (${progress.current}/${progress.total})` : "高品質スタンプを一括生成する"}
           </button>
         </div>
       </div>
