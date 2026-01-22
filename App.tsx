@@ -87,12 +87,14 @@ const App: React.FC = () => {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 環境変数の取得（様々なパターンに対応）
   const getEnvKey = () => {
     try {
-      return process.env.API_KEY || (window as any).process?.env?.API_KEY;
+      // @ts-ignore
+      const key = process.env.API_KEY || window.API_KEY;
+      return key;
     } catch (e) {
-      return undefined;
+      // @ts-ignore
+      return window.API_KEY;
     }
   };
 
@@ -130,8 +132,8 @@ const App: React.FC = () => {
       const count = activeTab === 'auto' ? 8 : 16;
       const suggestions = await suggestMessages(count, basePrompt || "日常で使いやすいスタンプセット");
       setBatchItems(suggestions.map(s => ({ text: s, additionalPrompt: "" })));
-    } catch (e) {
-      setError("AI案の取得に失敗しました。再デプロイが完了しているか確認してください。");
+    } catch (e: any) {
+      setError(`AI案の取得に失敗しました: ${e.message}\nAPIキーが正しく読み込めていない可能性があります。`);
     } finally {
       setIsSuggesting(false);
     }
@@ -157,7 +159,7 @@ const App: React.FC = () => {
 
     const envKey = getEnvKey();
     if (!envKey && !window.aistudio) {
-      setError("【APIキーがまだ反映されていません】\n1. Vercelで Name を『API_KEY』にして Save しましたか？\n2. その後、Vercelの『Deployments』タブから『Redeploy』を実行しましたか？\n\n『Redeploy』をしないと、名前を変えてもアプリ側には伝わりません。");
+      setError("【APIキーが見つかりません】\n環境変数 API_KEY が空です。\nVercelの設定 > Environment Variables で Name: API_KEY が存在するか確認し、設定した後に必ず Deployments 画面から Redeploy を行ってください。");
       return;
     }
 
@@ -184,7 +186,7 @@ const App: React.FC = () => {
           setGeneratedStamps(prev => [stamp, ...prev]);
           setProgress(prev => ({ ...prev, current: i + 1 }));
         } catch (e: any) {
-          setError(`「${item.text}」の作成中にエラー: ${e.message}\nAPIキーが有効な有料プロジェクトのものか確認してください。`);
+          setError(`「${item.text}」の作成中にエラー: ${e.message}`);
           break; 
         }
       }
@@ -192,6 +194,22 @@ const App: React.FC = () => {
       setError("予期せぬエラーが発生しました。");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    if (generatedStamps.length === 0) return;
+    
+    for (let i = 0; i < generatedStamps.length; i++) {
+      const stamp = generatedStamps[i];
+      const link = document.createElement('a');
+      link.href = stamp.url;
+      link.download = `stamp-${stamp.prompt}-${stamp.id.slice(0, 4)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // ブラウザが同時に大量のダウンロードをブロックするのを防ぐために少し待つ
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
   };
 
@@ -278,15 +296,16 @@ const App: React.FC = () => {
 
               <div className="p-3 rounded-xl bg-[#F0EDE8]/50 border border-[#E5E0D8]">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-[#6b7280]">APIキー接続</span>
+                  <span className="text-[10px] font-bold text-[#6b7280]">APIキー検知</span>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isEnvKeyAvailable ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {isEnvKeyAvailable ? 'ONLINE' : 'OFFLINE'}
+                    {isEnvKeyAvailable ? 'DETECTED' : 'OFFLINE'}
                   </span>
                 </div>
                 {!isEnvKeyAvailable && (
                   <div className="mt-3 p-2 bg-white/50 rounded-lg border border-red-100">
                     <p className="text-[9px] text-red-600 leading-relaxed font-bold">
-                      設定を反映させるために、Vercelの『Deployments』タブから <span className="underline">Redeploy</span> を実行してください！
+                      環境変数がブラウザに反映されていません。<br/>
+                      Vercelの設定でAPI_KEYを追加した後、必ず「Redeploy」を行ってください。
                     </p>
                   </div>
                 )}
@@ -340,26 +359,43 @@ const App: React.FC = () => {
                 <span className="text-base">⚠️</span>
                 <span>ご確認ください</span>
               </div>
-              <p className="ml-6 opacity-80 whitespace-pre-wrap">{error}</p>
+              <p className="ml-6 opacity-80 whitespace-pre-wrap text-left">{error}</p>
             </div>
           )}
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {generatedStamps.map(stamp => (
-              <div key={stamp.id} className="bg-white p-3 rounded-2xl border border-[#F0EDE8] shadow-sm group relative hover:shadow-md transition-all animate-in zoom-in-95">
-                <div className="aspect-square bg-[#F9F9F9] rounded-xl overflow-hidden mb-3 border border-[#F0EDE8]">
-                  <img src={stamp.url} className="w-full h-full object-contain" />
-                </div>
-                <p className="text-[10px] font-bold text-center text-[#112D42] truncate px-1">{stamp.prompt}</p>
+          {generatedStamps.length > 0 && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-[#112D42] text-lg flex items-center gap-2">
+                  <span className="w-2 h-6 bg-[#E2B13C] rounded-full"></span>
+                  生成されたスタンプ
+                </h3>
                 <button 
-                  onClick={() => { const a = document.createElement('a'); a.href = stamp.url; a.download = `stamp-${stamp.id}.png`; a.click(); }} 
-                  className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 bg-white/90 shadow-xl rounded-full p-2 hover:bg-[#E2B13C] hover:text-white transition-all transform hover:scale-110"
+                  onClick={handleDownloadAll}
+                  className="text-xs bg-[#E2B13C] text-white px-5 py-2.5 rounded-full font-bold shadow-md hover:bg-[#d4a32d] transition-all flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                  すべて保存する
                 </button>
               </div>
-            ))}
-          </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {generatedStamps.map(stamp => (
+                  <div key={stamp.id} className="bg-white p-3 rounded-2xl border border-[#F0EDE8] shadow-sm group relative hover:shadow-md transition-all animate-in zoom-in-95">
+                    <div className="aspect-square bg-[#F9F9F9] rounded-xl overflow-hidden mb-3 border border-[#F0EDE8]">
+                      <img src={stamp.url} className="w-full h-full object-contain" />
+                    </div>
+                    <p className="text-[10px] font-bold text-center text-[#112D42] truncate px-1">{stamp.prompt}</p>
+                    <button 
+                      onClick={() => { const a = document.createElement('a'); a.href = stamp.url; a.download = `stamp-${stamp.prompt}.png`; a.click(); }} 
+                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 bg-white/90 shadow-xl rounded-full p-2 hover:bg-[#E2B13C] hover:text-white transition-all transform hover:scale-110"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

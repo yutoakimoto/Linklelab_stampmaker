@@ -15,9 +15,17 @@ export interface StampConfig {
 // Helper to get API key safely
 const getApiKey = () => {
   try {
-    return process.env.API_KEY || (window as any).process?.env?.API_KEY;
+    // @ts-ignore
+    const key = process.env.API_KEY || window.API_KEY;
+    if (!key) {
+      console.warn("API_KEY not found in process.env or window. Checking window.process...");
+      // @ts-ignore
+      return window.process?.env?.API_KEY;
+    }
+    return key;
   } catch (e) {
-    return undefined;
+    // @ts-ignore
+    return window.API_KEY || window.process?.env?.API_KEY;
   }
 };
 
@@ -39,13 +47,11 @@ export const fileToBase64 = (file: File): Promise<string> => {
  * AIにメッセージ案を提案してもらう機能
  */
 export const suggestMessages = async (count: number, context: string): Promise<string[]> => {
-  // デフォルトの提案（エラー時のバックアップ）
   const fallback = ["ありがとう", "了解", "おやすみ", "OK", "おつかれ", "よろしく", "ぺこり", "！！", "まかせて", "ぴえん", "わーい", "おめでとう", "すごい！", "それな", "おはよ", "またね"].slice(0, count);
 
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.warn("API_KEY is not defined. Using fallback suggestions.");
-    return fallback;
+    throw new Error("APIキーが定義されていません。環境変数をご確認ください。");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -74,9 +80,9 @@ export const suggestMessages = async (count: number, context: string): Promise<s
 
     const parsed = JSON.parse(text.trim());
     return Array.isArray(parsed) ? parsed : fallback;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Suggestion Error:", error);
-    return fallback;
+    throw new Error(`Gemini通信エラー: ${error.message}`);
   }
 };
 
@@ -96,7 +102,6 @@ export const generateStampImage = async (
   
   const ai = new GoogleGenAI({ apiKey });
 
-  // キャラクターの「同一性」と「画風の継続性」を定義する指示
   const characterConsistencyInstruction = referenceImages.length > 0 
     ? `
     **CHARACTER IDENTITY & CONTINUITY**
@@ -160,9 +165,9 @@ export const generateStampImage = async (
         return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-    throw new Error("No image generated.");
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+    throw new Error("画像が生成されませんでした。");
+  } catch (error: any) {
+    console.error("Gemini Image API Error:", error);
+    throw new Error(`画像生成エラー: ${error.message}`);
   }
 };
