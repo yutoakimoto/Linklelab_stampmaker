@@ -49,7 +49,7 @@ const BatchItemRow = memo(({
           value={text} 
           onChange={e => setText(e.target.value)} 
           onBlur={handleBlurText}
-          placeholder="スタンプの文字（例：了解！）" 
+          placeholder="スタンプの文字" 
           className="flex-1 p-0 bg-transparent border-none text-sm font-bold text-[#112D42] placeholder-[#C0B7A9] focus:ring-0 outline-none"
         />
       </div>
@@ -59,7 +59,7 @@ const BatchItemRow = memo(({
           value={prompt} 
           onChange={e => setPrompt(e.target.value)} 
           onBlur={handleBlurPrompt}
-          placeholder="表情やポーズの指定（例：笑顔で手を振る）" 
+          placeholder="表情やポーズの指定" 
           className="p-0 bg-transparent border-none text-[10px] text-[#6b7280] placeholder-[#D1D5DB] focus:ring-0 outline-none border-t border-[#F0EDE8] pt-2 mt-1"
         />
       )}
@@ -112,7 +112,7 @@ const App: React.FC = () => {
 
   const handleSuggest = async () => {
     if (inputPassword !== APP_PASSWORD) {
-      setError("アクセス認証（パスワード入力）を済ませてください。");
+      setError("アクセス認証を済ませてください。");
       return;
     }
     setIsSuggesting(true);
@@ -147,7 +147,7 @@ const App: React.FC = () => {
     }
 
     if (!isKeyReady) {
-      setError("APIキーが選択されていません。上部のダイアログからAPIキーを選択してください。");
+      setError("APIキーが選択されていません。");
       return;
     }
 
@@ -174,12 +174,15 @@ const App: React.FC = () => {
           setGeneratedStamps(prev => [stamp, ...prev]);
           setProgress(prev => ({ ...prev, current: i + 1 }));
         } catch (e: any) {
-          setError(`「${item.text}」の作成中にエラー: ${e.message}`);
-          break; 
+          if (e.message.includes("Requested entity was not found")) {
+            setIsKeyReady(false); // キー再選択を促す
+            throw new Error("APIキーが無効です。もう一度キーを選択し直してください。");
+          }
+          throw e;
         }
       }
     } catch (err: any) {
-      setError("予期せぬエラーが発生しました。");
+      setError(err.message || "予期せぬエラーが発生しました。");
     } finally {
       setIsGenerating(false);
     }
@@ -194,7 +197,7 @@ const App: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 600));
     }
   };
 
@@ -219,7 +222,7 @@ const App: React.FC = () => {
 
       <main className="max-w-5xl mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-4 space-y-6">
-          <section className="bg-white rounded-3xl p-6 card-shadow border border-[#E5E0D8] hover:border-[#E2B13C]/30 transition-colors">
+          <section className="bg-white rounded-3xl p-6 card-shadow border border-[#E5E0D8]">
             <h3 className="text-xs font-bold mb-4 text-[#E2B13C] uppercase tracking-widest flex items-center gap-2">
               <span className="w-2 h-2 bg-[#E2B13C] rounded-full"></span>
               Character Settings
@@ -241,7 +244,7 @@ const App: React.FC = () => {
             <textarea 
               value={basePrompt} 
               onChange={e => setBasePrompt(e.target.value)} 
-              placeholder="キャラクターの特徴（例：赤い帽子、銀髪の少女、元気な表情）" 
+              placeholder="キャラの特徴（例：赤い帽子、銀髪）" 
               className="w-full p-4 border border-[#F0EDE8] bg-[#F9F9F9] rounded-2xl text-sm h-28 focus:ring-1 focus:ring-[#112D42] outline-none transition-all resize-none" 
             />
             <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
@@ -267,29 +270,18 @@ const App: React.FC = () => {
               Authentication
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-[#6b7280] ml-1">アプリパスワード</label>
-                <input 
-                  type="password" 
-                  value={inputPassword} 
-                  onChange={e => setInputPassword(e.target.value)} 
-                  placeholder="linklelab" 
-                  className={`w-full p-4 border rounded-2xl text-sm outline-none transition-all ${isPasswordCorrect ? 'bg-green-50 border-green-200 focus:ring-green-500' : 'bg-[#F9F9F9] border-[#F0EDE8] focus:ring-[#112D42]'}`}
-                />
-              </div>
-
-              <div className="p-3 rounded-xl bg-[#F0EDE8]/50 border border-[#E5E0D8]">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-[#6b7280]">APIキー接続</span>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isKeyReady ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                    {isKeyReady ? 'CONNECTED' : 'DISCONNECTED'}
-                  </span>
-                </div>
-                {!isKeyReady && (
-                  <p className="mt-2 text-[9px] text-[#6b7280] leading-relaxed">
-                    ページ上部の「APIキーを選択」ボタンから、Google AI Studioのキーを選択してください。
-                  </p>
-                )}
+              <input 
+                type="password" 
+                value={inputPassword} 
+                onChange={e => setInputPassword(e.target.value)} 
+                placeholder="アプリパスワード (linklelab)" 
+                className={`w-full p-4 border rounded-2xl text-sm outline-none transition-all ${isPasswordCorrect ? 'bg-green-50 border-green-200' : 'bg-[#F9F9F9] border-[#F0EDE8]'}`}
+              />
+              <div className="flex items-center justify-between p-3 bg-[#F8F5F0] rounded-xl border border-[#E5E0D8]">
+                <span className="text-[10px] font-bold text-[#6b7280]">AI Status</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isKeyReady ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {isKeyReady ? 'READY' : 'KEY MISSING'}
+                </span>
               </div>
             </div>
           </section>
@@ -299,15 +291,15 @@ const App: React.FC = () => {
           <section className="bg-white rounded-3xl p-6 md:p-8 card-shadow border border-[#E5E0D8]">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
               <div>
-                <h3 className="font-bold text-[#112D42] text-lg">メッセージの入力</h3>
-                <p className="text-[10px] text-[#6b7280]">スタンプに描画される文字を設定してください。</p>
+                <h3 className="font-bold text-[#112D42] text-lg">スタンプ案の入力</h3>
+                <p className="text-[10px] text-[#6b7280]">生成したいフレーズを入力してください。</p>
               </div>
               <button 
                 onClick={handleSuggest} 
                 disabled={isSuggesting || !isPasswordCorrect || !isKeyReady} 
-                className="w-full sm:w-auto text-xs bg-[#112D42] text-white px-6 py-3 rounded-full font-bold shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30 flex items-center justify-center gap-2"
+                className="w-full sm:w-auto text-xs bg-[#112D42] text-white px-6 py-3 rounded-full font-bold shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-30"
               >
-                {isSuggesting ? "案を考え中..." : "✨ AIに案をまかせる"}
+                {isSuggesting ? "思考中..." : "✨ AIに案をまかせる"}
               </button>
             </div>
             
@@ -329,48 +321,38 @@ const App: React.FC = () => {
               <div className="absolute top-0 left-0 w-full h-1 bg-white/10">
                 <div className="h-full bg-[#E2B13C] transition-all duration-500" style={{ width: `${(progress.current / progress.total) * 100}%` }} />
               </div>
-              <p className="text-base font-bold mb-2">高品質なスタンプを生成中...</p>
-              <p className="text-[11px] opacity-70">Nano Banana Pro が丁寧に描画しています ({progress.current}/{progress.total})</p>
+              <p className="text-base font-bold mb-2">高品質なスタンプを描画中...</p>
+              <p className="text-[11px] opacity-70">なのばななプロが作成しています ({progress.current}/{progress.total})</p>
             </div>
           )}
 
           {error && (
-            <div className="p-5 bg-red-50 text-red-700 rounded-3xl text-xs font-bold border border-red-200 shadow-sm animate-in slide-in-from-top-2">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-base">⚠️</span>
-                <span>ご確認ください</span>
-              </div>
-              <p className="ml-6 opacity-80 whitespace-pre-wrap">{error}</p>
+            <div className="p-5 bg-red-50 text-red-700 rounded-3xl text-xs font-bold border border-red-200">
+              <p>{error}</p>
             </div>
           )}
 
           {generatedStamps.length > 0 && (
             <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-[#112D42] text-lg flex items-center gap-2">
-                  <span className="w-2 h-6 bg-[#E2B13C] rounded-full"></span>
-                  生成されたスタンプ
-                </h3>
+                <h3 className="font-bold text-[#112D42] text-lg">生成完了 ({generatedStamps.length}枚)</h3>
                 <button 
                   onClick={handleDownloadAll}
-                  className="text-xs bg-[#E2B13C] text-white px-6 py-3 rounded-full font-bold shadow-md hover:bg-[#d4a32d] transition-all flex items-center gap-2"
+                  className="text-xs bg-[#E2B13C] text-white px-6 py-3 rounded-full font-bold shadow-md hover:bg-[#d4a32d] transition-all"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                   すべてまとめて保存
                 </button>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {generatedStamps.map(stamp => (
-                  <div key={stamp.id} className="bg-white p-3 rounded-2xl border border-[#F0EDE8] shadow-sm group relative hover:shadow-md transition-all animate-in zoom-in-95">
-                    <div className="aspect-square bg-[#F9F9F9] rounded-xl overflow-hidden mb-3 border border-[#F0EDE8]">
-                      <img src={stamp.url} className="w-full h-full object-contain" />
-                    </div>
-                    <p className="text-[10px] font-bold text-center text-[#112D42] truncate px-1">{stamp.prompt}</p>
+                  <div key={stamp.id} className="bg-white p-3 rounded-2xl border border-[#F0EDE8] shadow-sm relative group">
+                    <img src={stamp.url} className="w-full aspect-square object-contain bg-[#F9F9F9] rounded-xl" />
+                    <p className="text-[10px] font-bold text-center mt-2 truncate">{stamp.prompt}</p>
                     <button 
                       onClick={() => { const a = document.createElement('a'); a.href = stamp.url; a.download = `stamp-${stamp.prompt}.png`; a.click(); }} 
-                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 bg-white/90 shadow-xl rounded-full p-2 hover:bg-[#E2B13C] hover:text-white transition-all transform hover:scale-110"
+                      className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-full p-2 transition-all"
                     >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                      ⬇️
                     </button>
                   </div>
                 ))}
@@ -380,29 +362,14 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t border-[#E5E0D8] z-30 shadow-[0_-10px_40px_-15px_rgba(0,0,0,0.1)]">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-6">
-          <div className="hidden md:block">
-            <p className="text-[10px] font-bold text-[#E2B13C] uppercase tracking-widest">Selected Style</p>
-            <p className="text-sm font-bold text-[#112D42]">{STYLE_LABELS[style]} / {activeTab === 'auto' ? '8枚' : '16枚'}</p>
-          </div>
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-xl border-t border-[#E5E0D8] z-30 shadow-lg">
+        <div className="max-w-5xl mx-auto flex items-center justify-center">
           <button
             onClick={handleGenerateAll}
             disabled={isGenerating || !isPasswordCorrect || !isKeyReady}
-            className={`flex-1 md:flex-none md:min-w-[400px] py-4 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating || !isKeyReady) ? 'opacity-40 cursor-not-allowed grayscale' : 'hover:scale-[1.01] hover:shadow-2xl active:scale-[0.99]'}`}
+            className={`w-full max-w-lg py-5 rounded-2xl font-bold text-lg shadow-xl text-white transition-all premium-gradient flex items-center justify-center gap-3 ${(!isPasswordCorrect || isGenerating || !isKeyReady) ? 'opacity-40 cursor-not-allowed' : 'hover:scale-[1.02]'}`}
           >
-            {isGenerating ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                生成中 ({progress.current}/{progress.total})
-              </>
-            ) : !isKeyReady ? (
-              "APIキーを先に選択してください"
-            ) : !isPasswordCorrect ? (
-              "パスワードでロックを解除"
-            ) : (
-              "スタンプをまとめて作成する"
-            )}
+            {isGenerating ? `生成中 (${progress.current}/${progress.total})` : "スタンプを一括生成する"}
           </button>
         </div>
       </div>

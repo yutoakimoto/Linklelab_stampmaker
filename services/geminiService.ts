@@ -12,11 +12,6 @@ export interface StampConfig {
   additionalPrompt: string;
 }
 
-// Helper to get API key safely - Using process.env.API_KEY which is injected by AI Studio selection
-const getApiKey = () => {
-  return process.env.API_KEY;
-};
-
 // Helper to convert Blob/File to Base64
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -35,48 +30,30 @@ export const fileToBase64 = (file: File): Promise<string> => {
  * AIにメッセージ案を提案してもらう機能
  */
 export const suggestMessages = async (count: number, context: string): Promise<string[]> => {
-  const fallback = ["ありがとう", "了解", "おやすみ", "OK", "おつかれ", "よろしく", "ぺこり", "！！", "まかせて", "ぴえん", "わーい", "おめでとう", "すごい！", "それな", "おはよ", "またね"].slice(0, count);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `LINEスタンプのメッセージ案を${count}個考えてください。文脈・設定: ${context || "日常で使いやすいもの"}`,
+    config: { 
+      responseMimeType: "application/json",
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.STRING,
+          description: "スタンプに使用する短いフレーズ（10文字以内）"
+        }
+      },
+      systemInstruction: "あなたは人気LINEスタンプの企画担当者です。ユーザーの要望に合わせて、短くて使いやすいスタンプの文言をJSON形式の配列で提案してください。"
+    }
+  });
 
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("APIキーが選択されていません。");
-  }
-
-  // Create new instance to ensure latest key is used
-  const ai = new GoogleGenAI({ apiKey });
-  const prompt = `LINEスタンプのメッセージ案を${count}個考えてください。
-  文脈・設定: ${context || "日常で使いやすいもの"}`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: { 
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.STRING,
-            description: "スタンプに使用する短いフレーズ（10文字以内）"
-          }
-        },
-        systemInstruction: "あなたは人気LINEスタンプの企画担当者です。ユーザーの要望に合わせて、短くて使いやすいスタンプの文言をJSON形式の配列で提案してください。"
-      }
-    });
-
-    const text = response.text;
-    if (!text) return fallback;
-
-    const parsed = JSON.parse(text.trim());
-    return Array.isArray(parsed) ? parsed : fallback;
-  } catch (error: any) {
-    console.error("Suggestion Error:", error);
-    throw new Error(`Gemini通信エラー: ${error.message}`);
-  }
+  const rawText = response.text || "[]";
+  return JSON.parse(rawText);
 };
 
 /**
- * スタンプ画像を生成する
+ * スタンプ画像を生成する (Gemini 3 Pro Image 使用)
  */
 export const generateStampImage = async (
   referenceImages: ReferenceImageData[],
@@ -84,55 +61,25 @@ export const generateStampImage = async (
   text: string,
   additionalPrompt: string
 ): Promise<string> => {
-  const apiKey = getApiKey();
-  if (!apiKey) {
-    throw new Error("APIキーが選択されていません。");
-  }
-  
-  const ai = new GoogleGenAI({ apiKey });
+  // 常に最新のAPIキーを使用するため、呼び出し直前にインスタンス化
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const characterConsistencyInstruction = referenceImages.length > 0 
-    ? `
-    **CHARACTER IDENTITY & CONTINUITY**
-    - The provided reference image defines the character's "Anchor Features": specific hair flow/volume, eye shape characteristics, and overall facial structure.
-    - You MUST treat this character as the recurring protagonist of a professional sticker series.
-    - Maintain the character's core identity (same person) while allowing dynamic changes in facial expressions (laughing, crying, apologizing) and varied body poses.
-    - **Crucial**: The artistic medium, brush stroke quality, and lighting style must be identical to the reference image.
-    `
-    : `
-    **CHARACTER CONSISTENCY**
-    - Create a distinct, memorable character design.
-    - Use this same character design consistently for every sticker in the set.
-    `;
+  const characterConsistencyInstruction = referenceImages && referenceImages.length > 0 
+    ? `Maintain the character from the images. Artistic medium/brush stroke must be identical to the references.`
+    : `Create a distinct, consistent character design.`;
 
   const prompt = `
     Task: Design a professional LINE Messenger Sticker (Stamp).
-
-    **Character Performance**
-    - Message: "${text}"
-    - Pose/Action: ${additionalPrompt || "Expressing the emotion naturally"}.
-    - Ensure the character's expression is vivid, emotive, and matches the message "${text}".
-
+    Message: "${text}"
+    Pose/Action: ${additionalPrompt || "Expressing the emotion naturally"}.
     ${characterConsistencyInstruction}
-
-    **Style Specification**
-    - Art Style: ${style}
-    - Aesthetic: High-end sticker illustration. Clean, professional, and visually appealing.
-    
-    **Graphic Integration**
-    - Effectively include the text "${text}" within the image using stylized, readable Japanese typography.
-    - The text should feel like a natural part of the sticker composition.
-
-    **Technical Specs**
-    - Background: SOLID PURE WHITE (#FFFFFF) ONLY. 
-    - No background elements, no floor shadows, no scenery.
-    - Die-cut: Add a crisp, thick white border around the character silhouette for a "sticker" look.
-    - Composition: Centered.
+    Style: ${style}
+    Graphic: Include the text "${text}" in stylized, readable Japanese typography.
+    Technical: SOLID PURE WHITE (#FFFFFF) BACKGROUND. Die-cut white border. High quality illustration.
   `;
 
   const parts: any[] = [{ text: prompt }];
-
-  if (referenceImages.length > 0) {
+  if (referenceImages && referenceImages.length > 0) {
     referenceImages.forEach((img) => {
       parts.push({
         inlineData: { data: img.base64, mimeType: img.mimeType },
@@ -140,26 +87,25 @@ export const generateStampImage = async (
     });
   }
 
-  try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-image-preview',
-      contents: { parts: parts },
-      config: {
-        imageConfig: { aspectRatio: "1:1", imageSize: "1K" },
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-pro-image-preview',
+    contents: { parts: parts },
+    config: {
+      imageConfig: {
+        aspectRatio: "1:1",
+        imageSize: "1K"
       },
-    });
+    },
+  });
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:image/png;base64,${part.inlineData.data}`;
-      }
+  const candidate = response.candidates?.[0];
+  if (!candidate) throw new Error("No candidates returned from AI.");
+
+  for (const part of candidate.content.parts) {
+    if (part.inlineData) {
+      return `data:image/png;base64,${part.inlineData.data}`;
     }
-    throw new Error("画像が生成されませんでした。");
-  } catch (error: any) {
-    console.error("Gemini Image API Error:", error);
-    if (error.message?.includes("entity was not found")) {
-      throw new Error("APIキーの設定エラーです。Google AI Studioで適切なプロジェクト（請求設定済みなど）のキーを選択し直してください。");
-    }
-    throw new Error(`画像生成エラー: ${error.message}`);
   }
+  
+  throw new Error("No image data found in AI response.");
 };
