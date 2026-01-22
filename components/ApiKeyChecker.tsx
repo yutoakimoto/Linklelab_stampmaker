@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 
 interface ApiKeyCheckerProps {
@@ -9,9 +10,19 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeySelected }) =
   const [needsKey, setNeedsKey] = useState(false);
 
   const checkKey = async () => {
+    // AI Studio外（Vercelデプロイ後など）では window.aistudio が存在しないため、
+    // 特殊なキー選択フローをスキップし、環境変数 process.env.API_KEY を使用するようにします。
+    if (!window.aistudio) {
+      setChecking(false);
+      setNeedsKey(false);
+      onKeySelected();
+      return;
+    }
+
     setChecking(true);
     try {
-      if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
+      // AI Studio環境内では、Nano Banana Pro（Gemini 3 Pro Image）利用のためにキー選択状態を確認
+      if (await window.aistudio.hasSelectedApiKey()) {
         setNeedsKey(false);
         onKeySelected();
       } else {
@@ -34,7 +45,7 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeySelected }) =
     if (window.aistudio) {
       try {
         await window.aistudio.openSelectKey();
-        // Assume success after closing modal (race condition mitigation per instructions)
+        // モーダルが閉じられた後は成功したと見なして進行
         setNeedsKey(false);
         onKeySelected();
       } catch (e) {
@@ -46,15 +57,16 @@ export const ApiKeyChecker: React.FC<ApiKeyCheckerProps> = ({ onKeySelected }) =
   if (checking) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-white z-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#06C755]"></div>
       </div>
     );
   }
 
-  if (needsKey) {
+  // AI Studio環境かつキー未選択の場合のみモーダルを表示
+  if (needsKey && window.aistudio) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 backdrop-blur-sm p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center">
+        <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl text-center font-sans">
           <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
              <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
